@@ -4,17 +4,7 @@ import type { GetCreditSummaryResponse } from '../types/get-credit-summary'
 import type { GetDebitSummaryResponse } from '../types/get-debit-summary'
 import type { GetSummaryResponse } from '../types/get-summary'
 import type { ListTransactionsResponse } from '../types/list-transactions'
-
-// Gerenciador de sessionId no frontend para contornar problemas de cookies
-const getOrCreateSessionId = () => {
-  let sessionId = localStorage.getItem('dt-money-session-id')
-  if (!sessionId) {
-    sessionId = crypto.randomUUID()
-    localStorage.setItem('dt-money-session-id', sessionId)
-    console.log('🆔 Created new sessionId:', sessionId)
-  }
-  return sessionId
-}
+import { getOrCreateSessionId } from '@/utils/sessionId' // ajuste o path conforme sua estrutura
 
 export function useCreateTransaction(currentPage: number, currentSearchQuery?: string) {
   const queryClient = useQueryClient()
@@ -26,11 +16,17 @@ export function useCreateTransaction(currentPage: number, currentSearchQuery?: s
       console.log('🍪 Using sessionId:', sessionId)
       console.log('🍪 Document cookies:', document.cookie)
       
+      // IMPORTANTE: Forçar o sessionId via cookie manual
+      // Definir o cookie manualmente antes da requisição
+      document.cookie = `sessionId=${sessionId}; path=/; max-age=${60 * 60 * 24 * 7}; SameSite=None; Secure`
+      
+      console.log('🍪 Set manual cookie, new document.cookie:', document.cookie)
+      
       const response = await fetch('https://ignite-nodejs-02-api-rest-m3es.onrender.com/transactions', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
-          // Enviar sessionId via header como fallback
+          // Enviar sessionId via header E cookie
           'X-Session-ID': sessionId,
         },
         credentials: 'include',
@@ -41,7 +37,25 @@ export function useCreateTransaction(currentPage: number, currentSearchQuery?: s
       console.log('📡 POST response headers:', Object.fromEntries(response.headers.entries()))
 
       if (!response.ok) {
-        throw new Error('Failed to create transaction.')
+        const errorText = await response.text()
+        console.error('❌ Server error:', errorText)
+        throw new Error(`Failed to create transaction: ${response.status} ${errorText}`)
+      }
+
+      // Verificar se a transação foi realmente criada fazendo um GET
+      console.log('🔍 Verifying transaction was created on server...')
+      
+      const verifyResponse = await fetch(`https://ignite-nodejs-02-api-rest-m3es.onrender.com/transactions?page=1`, {
+        headers: {
+          'X-Session-ID': sessionId,
+        },
+        credentials: 'include',
+      })
+      
+      if (verifyResponse.ok) {
+        const verifyData = await verifyResponse.json()
+        console.log('✅ Server verification - transactions found:', verifyData.transactions?.length || 0)
+        console.log('📊 First transaction:', verifyData.transactions?.[0])
       }
 
       return { success: true, sessionId }
@@ -177,13 +191,26 @@ export function useCreateTransaction(currentPage: number, currentSearchQuery?: s
       })
       
       // Se precisar refetch por algum motivo específico, fazer isso manualmente depois
-      // setTimeout(() => {
-      //   console.log('🔄 Manual refetch (only if needed)...')
-      //   queryClient.refetchQueries({ 
-      //     queryKey: currentListQueryKey,
-      //     exact: true
-      //   })
-      // }, 2000) // Muito mais tempo
+      setTimeout(() => {
+        console.log('🔄 Smart refetch - checking if data is still consistent...')
+        
+        const currentData = queryClient.getQueryData<ListTransactionsResponse>(currentListQueryKey)
+        const optimisticTransaction = currentData?.transactions.find(t => t.id.startsWith('temp-'))
+        
+        if (optimisticTransaction) {
+          console.log('🔄 Found optimistic transaction, doing gentle refetch...')
+          
+          // Fazer refetch mas manter a transação otimista se o servidor não retornar ela ainda
+          queryClient.refetchQueries({ 
+            queryKey: currentListQueryKey,
+            exact: true
+          }).then(() => {
+            console.log('🔄 Refetch completed')
+          })
+        } else {
+          console.log('✅ No optimistic transaction found, data is already synchronized')
+        }
+      }, 3000) // 3 segundos - tempo suficiente para o servidor processar
     },
   })
 }
