@@ -44,72 +44,84 @@ export function TransactionModal({ onTransactionCreated }: TransactionModalProps
   async function handleCreateTransaction(data: CreateTransactionInterface) {
     reset()
     onTransactionCreated()
-
-    await createTransaction({
-      ...data,
-    })
+    await createTransaction({ ...data })
   }
 
   return (
     <Dialog.Portal>
-      <Dialog.Overlay className="fixed inset-0 h-full w-full bg-black/75" />
+      <Dialog.Overlay className="fade-in-0 fixed inset-0 z-50 animate-in bg-black/70 backdrop-blur-sm duration-300" />
 
-      <Dialog.Content className="-translate-x-1/2 -translate-y-1/2 fixed top-1/2 left-1/2 min-w-lg space-y-5 rounded-md bg-zinc-800 px-12 pt-10">
-        <Dialog.Title className="font-semibold text-white text-xl">Nova transação</Dialog.Title>
+      <Dialog.Content className="sm:-translate-x-1/2 sm:-translate-y-1/2 fade-in-0 zoom-in-95 fixed inset-0 z-50 h-full w-full animate-in rounded-none bg-gradient-to-br from-slate-900 to-slate-800 backdrop-blur-xl duration-300 sm:inset-auto sm:top-1/2 sm:left-1/2 sm:mx-4 sm:h-auto sm:w-full sm:max-w-md sm:rounded-2xl sm:border sm:border-slate-700/50 sm:shadow-2xl">
+        <div className="flex h-full flex-col p-6 sm:h-auto sm:p-8">
+          <div className="mb-6 flex items-center justify-between">
+            <Dialog.Title className="font-bold text-white text-xl sm:text-2xl">Nova transação</Dialog.Title>
+            <Dialog.Close asChild>
+              <button
+                type="button"
+                className="rounded-xl bg-slate-800/50 p-2 text-slate-400 transition-all duration-200 hover:scale-105 hover:bg-slate-700/50 hover:text-white"
+                aria-label="Fechar"
+              >
+                <X className="h-5 w-5" />
+              </button>
+            </Dialog.Close>
+          </div>
 
-        <form onSubmit={handleSubmit(handleCreateTransaction)} className="flex flex-col gap-3 text-white">
-          <input
-            type="text"
-            {...register('title')}
-            className="rounded-md bg-zinc-900 px-3 py-2 outline-0 focus:outline-1 focus:outline-green-300"
-            placeholder="Título"
-          />
-          {errors.title && <span className="text-red-500 text-sm">{errors.title.message}</span>}
-          <input
-            type="text"
-            {...register('amount')}
-            className="rounded-md bg-zinc-900 px-3 py-2 outline-0 focus:outline-1 focus:outline-green-300"
-            placeholder="Valor"
-          />
-          {errors.amount && <span className="text-red-500 text-sm">{errors.amount.message}</span>}
-          <input
-            type="text"
-            {...register('description')}
-            className="rounded-md bg-zinc-900 px-3 py-2 outline-0 focus:outline-1 focus:outline-green-300"
-            placeholder="Categoria"
-          />
-          {errors.description && <span className="text-red-500 text-sm">{errors.description.message}</span>}
+          <div className="flex flex-1 flex-col justify-center sm:block">
+            <form onSubmit={handleSubmit(handleCreateTransaction)} className="space-y-6 sm:space-y-4">
+              <div className="space-y-1">
+                <input
+                  type="text"
+                  {...register('title')}
+                  className="h-12 w-full rounded-xl border border-slate-700/50 bg-slate-800/50 px-4 text-white placeholder-slate-400 outline-none transition-all duration-200 focus:border-emerald-500/50 focus:bg-slate-800/70 focus:ring-2 focus:ring-emerald-500/20"
+                  placeholder="Título da transação"
+                />
+                {errors.title && <span className="font-medium text-red-400 text-sm">{errors.title.message}</span>}
+              </div>
 
-          <RadioGroup.Root
-            className="mt-2 flex justify-between gap-2"
-            value={selectedType}
-            onValueChange={(value) => setValue('type', value as 'credit' | 'debit')}
-          >
-            <RadioOption value="credit" icon={<CircleArrowUp />} color="emerald">
-              Crédito
-            </RadioOption>
-            <RadioOption value="debit" icon={<CircleArrowDown />} color="red">
-              Débito
-            </RadioOption>
-          </RadioGroup.Root>
+              <div className="space-y-1">
+                <input
+                  type="text"
+                  {...register('amount')}
+                  className="h-12 w-full rounded-xl border border-slate-700/50 bg-slate-800/50 px-4 text-white placeholder-slate-400 outline-none transition-all duration-200 focus:border-emerald-500/50 focus:bg-slate-800/70 focus:ring-2 focus:ring-emerald-500/20"
+                  placeholder="Valor (R$)"
+                />
+                {errors.amount && <span className="font-medium text-red-400 text-sm">{errors.amount.message}</span>}
+              </div>
 
-          <button
-            type="submit"
-            className="my-4 cursor-pointer rounded-md bg-emerald-600 px-4 py-3 text-white transition-colors hover:bg-emerald-600/90"
-          >
-            Cadastrar
-          </button>
-        </form>
+              <div className="space-y-1">
+                <input
+                  type="text"
+                  {...register('description')}
+                  className="h-12 w-full rounded-xl border border-slate-700/50 bg-slate-800/50 px-4 text-white placeholder-slate-400 outline-none transition-all duration-200 focus:border-emerald-500/50 focus:bg-slate-800/70 focus:ring-2 focus:ring-emerald-500/20"
+                  placeholder="Categoria"
+                />
+                {errors.description && (
+                  <span className="font-medium text-red-400 text-sm">{errors.description.message}</span>
+                )}
+              </div>
 
-        <Dialog.Close asChild>
-          <button
-            type="button"
-            className="absolute top-4 right-4 cursor-pointer text-gray-400 transition-colors hover:text-zinc-400"
-            aria-label="Fechar"
-          >
-            <X size={20} />
-          </button>
-        </Dialog.Close>
+              <RadioGroup.Root
+                className="mt-6 grid grid-cols-2 gap-3"
+                value={selectedType}
+                onValueChange={(value) => setValue('type', value as 'credit' | 'debit')}
+              >
+                <RadioOption value="credit" icon={<CircleArrowUp />} color="emerald">
+                  Entrada
+                </RadioOption>
+                <RadioOption value="debit" icon={<CircleArrowDown />} color="red">
+                  Saída
+                </RadioOption>
+              </RadioGroup.Root>
+
+              <button
+                type="submit"
+                className="mt-8 h-12 w-full rounded-xl bg-gradient-to-r from-emerald-600 to-emerald-500 font-semibold text-white transition-all duration-300 hover:scale-105 hover:shadow-emerald-500/25 hover:shadow-lg active:scale-95"
+              >
+                Cadastrar transação
+              </button>
+            </form>
+          </div>
+        </div>
       </Dialog.Content>
     </Dialog.Portal>
   )
@@ -123,19 +135,23 @@ interface RadioOptionProps {
 }
 
 function RadioOption({ value, icon, color, children }: RadioOptionProps) {
-  const bgChecked = color === 'emerald' ? 'data-[state=checked]:bg-emerald-800' : 'data-[state=checked]:bg-red-600'
-  const textColor =
+  const styles =
     color === 'emerald'
-      ? 'text-emerald-500 group-data-[state=checked]:text-white'
-      : 'text-red-500 group-data-[state=checked]:text-white'
+      ? 'data-[state=checked]:bg-gradient-to-r data-[state=checked]:from-emerald-600 data-[state=checked]:to-emerald-500 data-[state=checked]:border-emerald-500/50 data-[state=checked]:shadow-lg data-[state=checked]:shadow-emerald-500/25'
+      : 'data-[state=checked]:bg-gradient-to-r data-[state=checked]:from-red-600 data-[state=checked]:to-red-500 data-[state=checked]:border-red-500/50 data-[state=checked]:shadow-lg data-[state=checked]:shadow-red-500/25'
+
+  const iconColor =
+    color === 'emerald'
+      ? 'text-emerald-400 group-data-[state=checked]:text-white'
+      : 'text-red-400 group-data-[state=checked]:text-white'
 
   return (
     <RadioGroup.Item
       value={value}
-      className={`group flex flex-1 cursor-pointer items-center justify-center gap-2 rounded-md bg-zinc-700/80 py-3 transition-colors data-[state=checked]:bg-emerald-800 data-[state=checked]:text-white data-[state=unchecked]:hover:bg-zinc-700/60 ${bgChecked} `}
+      className={`group flex h-12 cursor-pointer items-center justify-center gap-3 rounded-xl border border-slate-700/50 bg-slate-800/50 text-slate-300 transition-all duration-200 hover:bg-slate-700/50 data-[state=checked]:text-white ${styles}`}
     >
-      <div className={textColor}>{icon}</div>
-      <span className="text-sm">{children}</span>
+      <div className={iconColor}>{icon}</div>
+      <span className="font-medium">{children}</span>
     </RadioGroup.Item>
   )
 }

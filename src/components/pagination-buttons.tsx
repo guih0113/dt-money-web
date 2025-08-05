@@ -20,9 +20,7 @@ export function PaginationButtons({ page, totalPages, setPage, isFetching }: Pag
       let startPage = Math.max(1, page - Math.floor(visiblePages / 2))
       const endPage = Math.min(totalPages, startPage + visiblePages - 1)
 
-      // Se a faixa calculada (startPage a endPage) não preencher o número total de botões visíveis (ex: estamos nas últimas 2 páginas)
       if (endPage - startPage + 1 < visiblePages) {
-        // Recalcula startPage para "empurrar" os botões para a esquerda e preencher os 5 espaços
         startPage = Math.max(1, endPage - visiblePages + 1)
       }
 
@@ -36,15 +34,15 @@ export function PaginationButtons({ page, totalPages, setPage, isFetching }: Pag
   const pagesToShow = getPagesToShow()
 
   return (
-    <div className="mt-6 flex items-center justify-center gap-1.5">
+    <div className="mt-8 flex items-center justify-center gap-2">
       <button
-        className="flex h-8 w-8 items-center justify-center rounded-md bg-zinc-700/80 text-zinc-300"
+        className="flex h-10 w-10 items-center justify-center rounded-xl border border-slate-700/50 bg-slate-800/50 backdrop-blur-sm transition-all duration-200 hover:scale-105 hover:bg-slate-700/50 disabled:cursor-not-allowed disabled:opacity-50"
         onClick={() => setPage(Math.max(1, page - 1))}
         disabled={page === 1 || isFetching}
         aria-label="Página anterior"
         type="button"
       >
-        <ChevronLeft className={page === 1 ? 'text-zinc-700' : 'text-emerald-700'} />
+        <ChevronLeft className={`h-4 w-4 ${page === 1 ? 'text-slate-600' : 'text-emerald-400'}`} />
       </button>
 
       {pagesToShow.map((value) => (
@@ -58,13 +56,13 @@ export function PaginationButtons({ page, totalPages, setPage, isFetching }: Pag
       ))}
 
       <button
-        className="flex h-8 w-8 items-center justify-center rounded-md bg-zinc-700/80 text-zinc-300"
+        className="flex h-10 w-10 items-center justify-center rounded-xl border border-slate-700/50 bg-slate-800/50 backdrop-blur-sm transition-all duration-200 hover:scale-105 hover:bg-slate-700/50 disabled:cursor-not-allowed disabled:opacity-50"
         onClick={() => setPage(Math.min(totalPages, page + 1))}
         disabled={page === totalPages || isFetching}
         aria-label="Próxima página"
         type="button"
       >
-        <ChevronRight className={page === totalPages ? 'text-zinc-700' : 'text-emerald-700'} />
+        <ChevronRight className={`h-4 w-4 ${page === totalPages ? 'text-slate-600' : 'text-emerald-400'}`} />
       </button>
     </div>
   )
@@ -80,7 +78,11 @@ type ButtonProps = {
 function Button({ value, isActive, onClick, disabled }: ButtonProps) {
   return (
     <button
-      className={`h-8 w-8 rounded-md ${isActive ? 'bg-emerald-700 ' : 'bg-zinc-700/80 text-zinc-300'} text-zinc-300 transition-colors duration-150 ${disabled ? 'cursor-not-allowed opacity-50' : ''} `}
+      className={`h-10 w-10 rounded-xl font-medium transition-all duration-200 hover:scale-105 disabled:cursor-not-allowed disabled:opacity-50 ${
+        isActive
+          ? 'bg-gradient-to-r from-emerald-600 to-emerald-500 text-white shadow-emerald-500/25 shadow-lg'
+          : 'border border-slate-700/50 bg-slate-800/50 text-slate-300 backdrop-blur-sm hover:bg-slate-700/50'
+      }`}
       type="button"
       onClick={onClick}
       disabled={disabled}

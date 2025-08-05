@@ -1,17 +1,14 @@
 import { useEffect, useState } from 'react'
 import { useSearchParams } from 'react-router'
 import { useListTransactions } from '@/http/hooks/useListTransactions'
+import type { Transaction } from '@/http/types/transaction'
 import { PaginationButtons } from './pagination-buttons'
 import { SearchForm } from './searchForm'
-import type { Transaction } from '@/http/types/transaction'
 
 export function TransactionsTable() {
   const [searchParams, setSearchParams] = useSearchParams()
-
   const pageFromUrl = Number(searchParams.get('page')) || 1
-
   const queryFromUrl = searchParams.get('query') || undefined
-
   const [page, setPage] = useState(pageFromUrl)
   const [currentSearchQuery, setCurrentSearchQuery] = useState<string | undefined>(queryFromUrl)
 
@@ -21,15 +18,13 @@ export function TransactionsTable() {
   }, [pageFromUrl, queryFromUrl])
 
   const { data, isFetching } = useListTransactions(page, currentSearchQuery)
-
   const transactionsToDisplay: Transaction[] | undefined = data?.transactions
-
   const currentPage = Number(data?.page)
   const totalPages = data?.totalPages ?? 1
 
   function formatCurrency(value: string | number | null | undefined) {
     const num = typeof value === 'number' ? value : Number(value)
-    if (Number.isNaN(num)) return '0,00'
+    if (Number.isNaN(num)) return 'R$ 0,00'
     const formatted = Math.abs(num).toLocaleString('pt-BR', {
       style: 'currency',
       currency: 'BRL',
@@ -47,31 +42,26 @@ export function TransactionsTable() {
 
   const handleSearchSubmit = (query: string | undefined) => {
     const newQuery = query === '' ? undefined : query
-
     setCurrentSearchQuery(newQuery)
     setPage(1)
 
     setSearchParams((prev) => {
       const newParams = new URLSearchParams(prev)
-
       if (newQuery) {
         newParams.set('query', newQuery)
       } else {
         newParams.delete('query')
       }
       newParams.set('page', '1')
-
       return newParams
     })
   }
 
   const handlePageChange = (newPage: number) => {
     setPage(newPage)
-
     setSearchParams((prev) => {
       const newParams = new URLSearchParams(prev)
       newParams.set('page', String(newPage))
-
       if (currentSearchQuery) {
         newParams.set('query', currentSearchQuery)
       } else {
@@ -84,38 +74,56 @@ export function TransactionsTable() {
   const hasTransactions = transactionsToDisplay && transactionsToDisplay.length > 0
 
   return (
-    <div className="flex flex-col items-center">
+    <div className="mx-auto w-full max-w-6xl px-4">
       <SearchForm onSearch={handleSearchSubmit} initialQuery={queryFromUrl} />
-      <div className="flex justify-center">
+
+      <div className="space-y-4">
         {isFetching ? (
-          <p className="py-8 text-center text-gray-400">Carregando transações...</p>
+          <div className="flex items-center justify-center py-16">
+            <div className="flex items-center gap-3 text-slate-400">
+              <div className="h-6 w-6 animate-spin rounded-full border-2 border-emerald-500 border-t-transparent" />
+              <span className="font-medium">Carregando transações...</span>
+            </div>
+          </div>
         ) : hasTransactions ? (
-          <table className="text-gray-300">
-            <tbody className="grid grid-cols-2 gap-2 md:grid-cols-1">
-              {transactionsToDisplay?.map((item) => (
-                <tr className="rounded-md bg-zinc-700/80 px-1 py-1" key={item.id}>
-                  <td className="w-full px-6 py-5">
-                    <div className="flex flex-col gap-2 md:flex-row md:items-center md:justify-between">
-                      <span className="w-[200px] md:w-3xs xl:w-md">{item.title}</span>
-                      <span className={`w-fit md:w-[175px] ${item.amount > 0 ? 'text-green-300' : 'text-red-500'}`}>
-                        {formatCurrency(item.amount)}
-                      </span>
-                      <div className="flex justify-between lg:w-auto lg:gap-4">
-                        <span className="w-fit md:w-[200px] xl:w-sm">{item.description}</span>
-                        <span>{formatDate(item.created_at)}</span>
-                      </div>
+          <div className="space-y-3">
+            {transactionsToDisplay?.map((item) => (
+              <div
+                key={item.id}
+                className="group relative overflow-hidden rounded-2xl border border-slate-700/50 bg-slate-800/40 p-4 backdrop-blur-sm transition-all duration-300 hover:scale-[1.02] hover:border-slate-600/50 hover:bg-slate-800/60 sm:p-6"
+              >
+                <div className="absolute inset-0 bg-gradient-to-r from-transparent via-white/5 to-transparent opacity-0 transition-opacity duration-300 group-hover:opacity-100" />
+
+                <div className="relative z-10 flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
+                  <div className="min-w-0 flex-1">
+                    <h3 className="truncate font-semibold text-lg text-white">{item.title}</h3>
+                    <p className="mt-1 truncate text-slate-400 text-sm">{item.description}</p>
+                  </div>
+
+                  <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:gap-8">
+                    <div className={`font-bold text-xl ${item.amount > 0 ? 'text-emerald-400' : 'text-red-400'}`}>
+                      {formatCurrency(item.amount)}
                     </div>
-                  </td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
+                    <div className="font-medium text-slate-400 text-sm">{formatDate(item.created_at)}</div>
+                  </div>
+                </div>
+              </div>
+            ))}
+          </div>
         ) : (
-          <p className="py-8 text-center text-gray-400">
-            {currentSearchQuery
-              ? `Nenhuma transação encontrada para "${currentSearchQuery}".`
-              : 'Nenhuma transação cadastrada ainda.'}
-          </p>
+          <div className="flex flex-col items-center justify-center py-16 text-center">
+            <div className="mb-4 flex h-16 w-16 items-center justify-center rounded-full bg-slate-800/50">
+              <span className="text-2xl text-slate-500">💰</span>
+            </div>
+            <p className="font-medium text-lg text-slate-400">
+              {currentSearchQuery
+                ? `Nenhuma transação encontrada para "${currentSearchQuery}"`
+                : 'Nenhuma transação cadastrada ainda'}
+            </p>
+            <p className="mt-2 text-slate-500 text-sm">
+              {!currentSearchQuery && 'Cadastre sua primeira transação usando o botão acima'}
+            </p>
+          </div>
         )}
       </div>
 

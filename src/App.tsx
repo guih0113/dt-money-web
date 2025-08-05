@@ -10,7 +10,7 @@ export default function App() {
     <BrowserRouter>
       <QueryClientProvider client={queryClient}>
         <Routes>
-          <Route path="/transactions" element={<Transactions />} />
+          <Route path="/" element={<Transactions />} />
         </Routes>
       </QueryClientProvider>
     </BrowserRouter>
