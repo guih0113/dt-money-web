@@ -5,11 +5,14 @@ import type { GetDebitSummaryResponse } from '../types/get-debit-summary'
 import type { GetSummaryResponse } from '../types/get-summary'
 import type { ListTransactionsResponse } from '../types/list-transactions'
 
-export function useCreateTransaction(_currentPage: number, currentSearchQuery?: string) {
+export function useCreateTransaction(currentPage: number, currentSearchQuery?: string) {
   const queryClient = useQueryClient()
 
   return useMutation({
     mutationFn: async (data: CreateTransactionFormData) => {
+      // Debug: verificar cookies antes da requisição
+      console.log('🍪 Cookies before request:', document.cookie)
+      
       const response = await fetch('https://ignite-nodejs-02-api-rest-m3es.onrender.com/transactions', {
         method: 'POST',
         headers: {
@@ -18,6 +21,10 @@ export function useCreateTransaction(_currentPage: number, currentSearchQuery?: 
         credentials: 'include',
         body: JSON.stringify(data),
       })
+
+      // Debug: verificar cookies após a requisição
+      console.log('🍪 Cookies after request:', document.cookie)
+      console.log('📡 Response status:', response.status)
 
       if (!response.ok) {
         throw new Error('Failed to create transaction.')
@@ -29,6 +36,8 @@ export function useCreateTransaction(_currentPage: number, currentSearchQuery?: 
     },
 
     onMutate({ title, description, amount, type }) {
+      console.log('🚀 Starting optimistic update...')
+      
       // Cancelar queries para evitar que fetches antigos sobrescrevam o update otimista
       queryClient.cancelQueries({ queryKey: ['list-transactions'] })
       queryClient.cancelQueries({ queryKey: ['get-summary'] })
@@ -37,45 +46,50 @@ export function useCreateTransaction(_currentPage: number, currentSearchQuery?: 
 
       const signedAmount = type === 'debit' ? Number(amount) * -1 : Number(amount)
       
-      // Criar a transação otimista com ID temporário
+      // Criar a transação otimista - IMPORTANTE: não definir session_id
+      // Deixar que o servidor atribua o sessionId correto
       const newTransaction = {
-        id: `temp-${Date.now()}`, // ID temporário único
+        id: `temp-${Date.now()}-${Math.random()}`, // ID temporário único
         title,
         description,
         amount: signedAmount,
         created_at: new Date().toISOString(),
-        session_id: 'temp-session',
+        // Não incluir session_id - será definido pelo servidor
       }
 
-      // Armazenar estados anteriores de TODAS as páginas que podem ser afetadas
-      const previousData: Record<string, any> = {}
+      // Armazenar estados anteriores
+      const snapshots: Record<string, any> = {}
       
-      // Atualizar todas as queries de lista que estão em cache
-      queryClient.getQueriesData({ queryKey: ['list-transactions'] }).forEach(([queryKey, data]) => {
+      // Função para fazer snapshot de uma query
+      const takeSnapshot = (queryKey: any[]) => {
         const key = JSON.stringify(queryKey)
-        previousData[key] = data
-        
-        const [, page, searchQuery] = queryKey as [string, number, string | undefined]
-        
-        queryClient.setQueryData<ListTransactionsResponse>(queryKey as any, (old) => {
-          if (!old) return old
-          
-          // Se for a primeira página OU se não há pesquisa (ou a pesquisa atual coincide)
-          const shouldAddTransaction = page === 1 && (!currentSearchQuery || searchQuery === currentSearchQuery)
-          
-          if (!shouldAddTransaction) {
-            // Para outras páginas, apenas atualiza o total
-            const newTotal = (old.total ?? 0) + 1
-            const newTotalPages = Math.ceil(newTotal / old.pageSize)
-            
+        const data = queryClient.getQueryData(queryKey)
+        snapshots[key] = data
+        return data
+      }
+
+      // Fazer snapshots de todas as queries que vamos modificar
+      const currentListQueryKey = ['list-transactions', currentPage, currentSearchQuery]
+      takeSnapshot(currentListQueryKey)
+      takeSnapshot(['get-summary'])
+      takeSnapshot(['get-debit-summary'])
+      takeSnapshot(['get-credit-summary'])
+
+      // Atualizar a lista atual apenas se estivermos na primeira página
+      if (currentPage === 1) {
+        queryClient.setQueryData<ListTransactionsResponse>(currentListQueryKey, (old) => {
+          if (!old) {
+            console.log('📝 Creating new list with optimistic transaction')
             return {
-              ...old,
-              total: newTotal,
-              totalPages: newTotalPages,
+              transactions: [newTransaction],
+              total: 1,
+              page: 1,
+              pageSize: 10,
+              totalPages: 1,
             }
           }
-          
-          // Para a primeira página, adiciona a nova transação
+
+          console.log('📝 Adding optimistic transaction to existing list')
           const updatedTransactions = [newTransaction, ...old.transactions].slice(0, old.pageSize)
           const newTotal = (old.total ?? 0) + 1
           const newTotalPages = Math.ceil(newTotal / old.pageSize)
@@ -87,95 +101,85 @@ export function useCreateTransaction(_currentPage: number, currentSearchQuery?: 
             totalPages: newTotalPages,
           }
         })
-      })
-
-      // Função para atualizar os caches de summary
-      const updateSummaryCache = <T extends GetSummaryResponse | GetDebitSummaryResponse | GetCreditSummaryResponse>(
-        queryKey: string[],
-        currentAmountKey: keyof T,
-        change: number,
-      ) => {
-        const prevData = queryClient.getQueryData<T>(queryKey)
-        const prevAmount = (prevData?.[currentAmountKey] as { amount: number } | undefined)?.amount ?? 0
-        const currentAmount = prevAmount + change
-
-        queryClient.setQueryData<T>(queryKey, (old) => ({
-          ...old,
-          [currentAmountKey]: { amount: currentAmount },
-        } as T))
-        
-        return prevData
       }
 
-      // Atualizar summaries
-      const previousSummary = updateSummaryCache(['get-summary'], 'summary', signedAmount)
-      
-      const previousDebitSummary = type === 'debit' 
-        ? updateSummaryCache(['get-debit-summary'], 'debitSummary', signedAmount)
-        : queryClient.getQueryData<GetDebitSummaryResponse>(['get-debit-summary'])
-      
-      const previousCreditSummary = type === 'credit' 
-        ? updateSummaryCache(['get-credit-summary'], 'creditSummary', signedAmount)
-        : queryClient.getQueryData<GetCreditSummaryResponse>(['get-credit-summary'])
+      // Atualizar summaries otimisticamente
+      queryClient.setQueryData<GetSummaryResponse>(['get-summary'], (old) => ({
+        ...old,
+        summary: { 
+          amount: ((old?.summary?.amount ?? 0) + signedAmount) 
+        },
+      }))
+
+      if (type === 'debit') {
+        queryClient.setQueryData<GetDebitSummaryResponse>(['get-debit-summary'], (old) => ({
+          ...old,
+          debitSummary: { 
+            amount: ((old?.debitSummary?.amount ?? 0) + signedAmount) 
+          },
+        }))
+      }
+
+      if (type === 'credit') {
+        queryClient.setQueryData<GetCreditSummaryResponse>(['get-credit-summary'], (old) => ({
+          ...old,
+          creditSummary: { 
+            amount: ((old?.creditSummary?.amount ?? 0) + signedAmount) 
+          },
+        }))
+      }
 
       return { 
         newTransaction, 
-        previousData,
-        previousSummary, 
-        previousDebitSummary, 
-        previousCreditSummary 
+        snapshots,
+        currentListQueryKey
       }
     },
 
-    onError(_error, _variables, context) {
+    onError(error, _variables, context) {
+      console.error('❌ Transaction creation failed, rolling back...', error)
+      
       if (!context) return
       
-      // Reverter todas as queries de lista
-      Object.entries(context.previousData).forEach(([keyStr, data]) => {
+      // Restaurar todos os snapshots
+      Object.entries(context.snapshots).forEach(([keyStr, data]) => {
         const queryKey = JSON.parse(keyStr)
         queryClient.setQueryData(queryKey, data)
       })
-      
-      // Reverter summaries
-      if (context.previousSummary) {
-        queryClient.setQueryData<GetSummaryResponse>(['get-summary'], context.previousSummary)
-      }
-      if (context.previousDebitSummary) {
-        queryClient.setQueryData<GetDebitSummaryResponse>(['get-debit-summary'], context.previousDebitSummary)
-      }
-      if (context.previousCreditSummary) {
-        queryClient.setQueryData<GetCreditSummaryResponse>(['get-credit-summary'], context.previousCreditSummary)
-      }
     },
 
-    onSuccess(_data, _variables, _context) {
-      console.log('✅ Transaction created successfully')
+    onSuccess() {
+      console.log('✅ Transaction created successfully on server')
       
-      // IMPORTANTE: Não invalidar imediatamente para não conflitar com optimistic update
-      // Em vez disso, fazer um refetch mais inteligente
-      
-      // Aguardar um pouco para garantir que o servidor processou
+      // Estratégia mais robusta: aguardar mais tempo e invalidar de forma escalonada
       setTimeout(() => {
-        console.log('🔄 Invalidating queries after successful creation')
+        console.log('🔄 Step 1: Invalidating list queries...')
         
-        // Invalidar apenas as queries que precisam ser atualizadas
+        // Primeiro, invalida as queries de lista
         queryClient.invalidateQueries({ 
           queryKey: ['list-transactions'],
-          refetchType: 'active' // Só refetch das queries ativas
+          exact: false, // Invalida todas as variações da query
         })
-        queryClient.invalidateQueries({ 
-          queryKey: ['get-summary'],
-          refetchType: 'active'
+      }, 200)
+
+      setTimeout(() => {
+        console.log('🔄 Step 2: Invalidating summary queries...')
+        
+        // Depois, invalida os summaries
+        queryClient.invalidateQueries({ queryKey: ['get-summary'] })
+        queryClient.invalidateQueries({ queryKey: ['get-debit-summary'] })
+        queryClient.invalidateQueries({ queryKey: ['get-credit-summary'] })
+      }, 400)
+
+      // Fallback: se ainda houver problemas, força um refetch completo
+      setTimeout(() => {
+        console.log('🔄 Step 3: Final refetch to ensure consistency...')
+        
+        queryClient.refetchQueries({ 
+          queryKey: ['list-transactions', currentPage, currentSearchQuery],
+          exact: true 
         })
-        queryClient.invalidateQueries({ 
-          queryKey: ['get-debit-summary'],
-          refetchType: 'active'
-        })
-        queryClient.invalidateQueries({ 
-          queryKey: ['get-credit-summary'],
-          refetchType: 'active'
-        })
-      }, 100) // 100ms delay para garantir sincronização
+      }, 600)
     },
   })
 }
