@@ -5,7 +5,7 @@ export function useGetDebitSummary() {
   return useQuery<GetDebitSummaryResponse>({
     queryKey: ['get-debit-summary'],
     queryFn: async () => {
-      const response = await fetch('http://localhost:3333/transactions/summary/debit', {
+      const response = await fetch('https://ignite-nodejs-02-api-rest-m3es.onrender.com/transactions/summary/debit', {
         credentials: 'include',
       })
       const result: GetDebitSummaryResponse = await response.json()

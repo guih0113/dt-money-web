@@ -10,7 +10,7 @@ export function useCreateTransaction(currentPage: number, currentSearchQuery?: s
 
   return useMutation({
     mutationFn: async (data: CreateTransactionFormData) => {
-      const response = await fetch('http://localhost:3333/transactions', {
+      const response = await fetch('https://ignite-nodejs-02-api-rest-m3es.onrender.com/transactions', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',

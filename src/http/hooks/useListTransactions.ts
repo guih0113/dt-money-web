@@ -8,7 +8,7 @@ export function useListTransactions(page: number, searchQuery?: string) {
     queryKey: ['list-transactions', page, searchQuery],
 
     queryFn: async () => {
-      let url = `http://localhost:3333/transactions?page=${page}`
+      let url = `https://ignite-nodejs-02-api-rest-m3es.onrender.com/transactions?page=${page}`
 
       // Adiciona o parâmetro 'query' APENAS se um termo de busca for fornecido.
       // É crucial usar encodeURIComponent para tratar caracteres especiais na URL.
