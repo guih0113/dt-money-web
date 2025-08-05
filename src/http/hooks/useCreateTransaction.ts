@@ -5,7 +5,7 @@ import type { GetDebitSummaryResponse } from '../types/get-debit-summary'
 import type { GetSummaryResponse } from '../types/get-summary'
 import type { ListTransactionsResponse } from '../types/list-transactions'
 
-export function useCreateTransaction(currentPage: number, currentSearchQuery?: string) {
+export function useCreateTransaction(_currentPage: number, currentSearchQuery?: string) {
   const queryClient = useQueryClient()
 
   return useMutation({
@@ -147,7 +147,7 @@ export function useCreateTransaction(currentPage: number, currentSearchQuery?: s
       }
     },
 
-    onSuccess(_data, _variables, context) {
+    onSuccess(_data, _variables, _context) {
       // IMPORTANTE: Não invalidar imediatamente para não conflitar com optimistic update
       // Em vez disso, fazer um refetch mais inteligente
       
