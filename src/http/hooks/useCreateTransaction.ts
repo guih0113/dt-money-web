@@ -22,28 +22,24 @@ export function useCreateTransaction(currentPage: number, currentSearchQuery?: s
 			if (!response.ok) {
 				throw new Error('Failed to create transaction.')
 			}
-
-			// Adicionando um tratamento mais seguro para respostas sem corpo
-			const contentType = response.headers.get('content-type');
-			if (contentType && contentType.includes('application/json')) {
-				const result = await response.json();
-				return result;
-			}
 			
-			// Se a resposta não tiver corpo JSON, apenas retorna o sucesso da requisição.
-			// Isso evita o erro 'Unexpected end of JSON input'.
-			return null;
+			const result = await response.json()
+			return result
 		},
 
 		onMutate({ title, description, amount, type }) {
-			// Cancelar queries para evitar que fetches antigos sobrescrevam o update otimista
+			// Cancela as queries para evitar que fetches antigos sobrescrevam o update otimista
 			queryClient.cancelQueries({ queryKey: ['list-transactions'] })
 			queryClient.cancelQueries({ queryKey: ['get-summary'] })
 			queryClient.cancelQueries({ queryKey: ['get-debit-summary'] })
 			queryClient.cancelQueries({ queryKey: ['get-credit-summary'] })
 
+			// Salva os dados anteriores para o caso de um rollback
 			const currentListQueryKey = ['list-transactions', currentPage, currentSearchQuery]
 			const previousList = queryClient.getQueryData<ListTransactionsResponse>(currentListQueryKey)
+			const previousSummary = queryClient.getQueryData<GetSummaryResponse>(['get-summary'])
+			const previousDebitSummary = queryClient.getQueryData<GetDebitSummaryResponse>(['get-debit-summary'])
+			const previousCreditSummary = queryClient.getQueryData<GetCreditSummaryResponse>(['get-credit-summary'])
 
 			const signedAmount = type === 'debit' ? Number(amount) * -1 : Number(amount)
 			const newTransaction = {
@@ -55,6 +51,7 @@ export function useCreateTransaction(currentPage: number, currentSearchQuery?: s
 				session_id: crypto.randomUUID(),
 			}
 
+			// Executa a atualização otimista na lista
 			queryClient.setQueryData<ListTransactionsResponse>(currentListQueryKey, (old) => {
 				if (!old) {
 					return {
@@ -74,40 +71,15 @@ export function useCreateTransaction(currentPage: number, currentSearchQuery?: s
 					total: (old.total ?? 0) + 1,
 				}
 			})
-
-			const updateSummaryCache = <T extends GetSummaryResponse | GetDebitSummaryResponse | GetCreditSummaryResponse>(
-				queryKey: string[],
-				currentAmountKey: keyof T,
-				prevData: T | undefined,
-				change: number,
-			) => {
-
-				const prevAmount = (prevData?.[currentAmountKey] as { amount: number } | undefined)?.amount ?? 0
-				const currentAmount = prevAmount + change
-
-				queryClient.setQueryData<T>(queryKey, {
-					[currentAmountKey]: { amount: currentAmount },
-				} as T)
-			}
-
-			const previousSummary = queryClient.getQueryData<GetSummaryResponse>(['get-summary'])
-			updateSummaryCache(['get-summary'], 'summary', previousSummary, signedAmount)
-
-			const previousDebitSummary = queryClient.getQueryData<GetDebitSummaryResponse>(['get-debit-summary'])
-			if (type === 'debit') {
-				updateSummaryCache(['get-debit-summary'], 'debitSummary', previousDebitSummary, signedAmount)
-			}
-
-			const previousCreditSummary = queryClient.getQueryData<GetCreditSummaryResponse>(['get-credit-summary'])
-			if (type === 'credit') {
-				updateSummaryCache(['get-credit-summary'], 'creditSummary', previousCreditSummary, signedAmount)
-			}
-
-			return { newTransaction, previousList, previousSummary, previousDebitSummary, previousCreditSummary }
+			
+			// É FUNDAMENTAL retornar o objeto com os dados para o contexto.
+			// O 'onError' vai usar este objeto para fazer o rollback.
+			return { previousList, previousSummary, previousDebitSummary, previousCreditSummary }
 		},
 
 		onError(_error, _variables, context) {
 			// Se a mutação falhar, reverte para os dados anteriores armazenados no contexto
+			// A verificação 'if (context?.previousList)' só funciona se o objeto 'context' foi retornado corretamente.
 			if (context?.previousList) {
 				const currentListQueryKey = ['list-transactions', currentPage, currentSearchQuery]
 				queryClient.setQueryData<ListTransactionsResponse>(currentListQueryKey, context.previousList)
@@ -124,7 +96,7 @@ export function useCreateTransaction(currentPage: number, currentSearchQuery?: s
 		},
 
 		onSettled() {
-			// Após a mutação (sucesso ou falha), invalida as queries para garantir que a lista e os summaries
+			// Após a mutação (sucesso ou falha), invalida as queries de summary para garantir que os dados
 			// sejam re-buscados do servidor e estejam totalmente sincronizados.
 			queryClient.invalidateQueries({ queryKey: ['list-transactions'] })
 			queryClient.invalidateQueries({ queryKey: ['get-summary'] })
