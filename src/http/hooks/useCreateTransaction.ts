@@ -5,62 +5,73 @@ import type { GetDebitSummaryResponse } from '../types/get-debit-summary'
 import type { GetSummaryResponse } from '../types/get-summary'
 import type { ListTransactionsResponse } from '../types/list-transactions'
 
+// Gerenciador de sessionId no frontend para contornar problemas de cookies
+const getOrCreateSessionId = () => {
+  let sessionId = localStorage.getItem('dt-money-session-id')
+  if (!sessionId) {
+    sessionId = crypto.randomUUID()
+    localStorage.setItem('dt-money-session-id', sessionId)
+    console.log('🆔 Created new sessionId:', sessionId)
+  }
+  return sessionId
+}
+
 export function useCreateTransaction(currentPage: number, currentSearchQuery?: string) {
   const queryClient = useQueryClient()
 
   return useMutation({
     mutationFn: async (data: CreateTransactionFormData) => {
-      // Debug: verificar cookies antes da requisição
-      console.log('🍪 Cookies before request:', document.cookie)
+      const sessionId = getOrCreateSessionId()
+      
+      console.log('🍪 Using sessionId:', sessionId)
+      console.log('🍪 Document cookies:', document.cookie)
       
       const response = await fetch('https://ignite-nodejs-02-api-rest-m3es.onrender.com/transactions', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
+          // Enviar sessionId via header como fallback
+          'X-Session-ID': sessionId,
         },
         credentials: 'include',
         body: JSON.stringify(data),
       })
 
-      // Debug: verificar cookies após a requisição
-      console.log('🍪 Cookies after request:', document.cookie)
-      console.log('📡 Response status:', response.status)
+      console.log('📡 POST response status:', response.status)
+      console.log('📡 POST response headers:', Object.fromEntries(response.headers.entries()))
 
       if (!response.ok) {
         throw new Error('Failed to create transaction.')
       }
 
-      // Como o backend retorna apenas status 201 sem body, 
-      // não precisamos fazer parse de JSON
-      return { success: true }
+      return { success: true, sessionId }
     },
 
     onMutate({ title, description, amount, type }) {
       console.log('🚀 Starting optimistic update...')
       
-      // Cancelar queries para evitar que fetches antigos sobrescrevam o update otimista
+      // Cancelar queries para evitar race conditions
       queryClient.cancelQueries({ queryKey: ['list-transactions'] })
       queryClient.cancelQueries({ queryKey: ['get-summary'] })
       queryClient.cancelQueries({ queryKey: ['get-debit-summary'] })
       queryClient.cancelQueries({ queryKey: ['get-credit-summary'] })
 
       const signedAmount = type === 'debit' ? Number(amount) * -1 : Number(amount)
+      const sessionId = getOrCreateSessionId()
       
-      // Criar a transação otimista - IMPORTANTE: não definir session_id
-      // Deixar que o servidor atribua o sessionId correto
+      // Criar a transação otimista
       const newTransaction = {
-        id: `temp-${Date.now()}-${Math.random()}`, // ID temporário único
+        id: `temp-${Date.now()}-${Math.random()}`,
         title,
         description,
         amount: signedAmount,
         created_at: new Date().toISOString(),
-        // Não incluir session_id - será definido pelo servidor
+        session_id: sessionId, // Usar o sessionId do frontend
       }
 
-      // Armazenar estados anteriores
+      // Armazenar snapshots para rollback
       const snapshots: Record<string, any> = {}
       
-      // Função para fazer snapshot de uma query
       const takeSnapshot = (queryKey: any[]) => {
         const key = JSON.stringify(queryKey)
         const data = queryClient.getQueryData(queryKey)
@@ -68,14 +79,14 @@ export function useCreateTransaction(currentPage: number, currentSearchQuery?: s
         return data
       }
 
-      // Fazer snapshots de todas as queries que vamos modificar
+      // Snapshots das queries que vamos modificar
       const currentListQueryKey = ['list-transactions', currentPage, currentSearchQuery]
       takeSnapshot(currentListQueryKey)
       takeSnapshot(['get-summary'])
       takeSnapshot(['get-debit-summary'])
       takeSnapshot(['get-credit-summary'])
 
-      // Atualizar a lista atual apenas se estivermos na primeira página
+      // Atualizar a lista apenas se estivermos na primeira página
       if (currentPage === 1) {
         queryClient.setQueryData<ListTransactionsResponse>(currentListQueryKey, (old) => {
           if (!old) {
@@ -132,7 +143,7 @@ export function useCreateTransaction(currentPage: number, currentSearchQuery?: s
       return { 
         newTransaction, 
         snapshots,
-        currentListQueryKey
+        sessionId
       }
     },
 
@@ -151,35 +162,38 @@ export function useCreateTransaction(currentPage: number, currentSearchQuery?: s
     onSuccess() {
       console.log('✅ Transaction created successfully on server')
       
-      // Estratégia mais robusta: aguardar mais tempo e invalidar de forma escalonada
+      // ESTRATÉGIA DIFERENTE: Em vez de invalidar imediatamente,
+      // vamos aguardar um pouco mais e usar uma abordagem mais conservadora
+      
       setTimeout(() => {
-        console.log('🔄 Step 1: Invalidating list queries...')
+        console.log('🔄 Refetching data to ensure consistency...')
         
-        // Primeiro, invalida as queries de lista
-        queryClient.invalidateQueries({ 
-          queryKey: ['list-transactions'],
-          exact: false, // Invalida todas as variações da query
-        })
-      }, 200)
-
-      setTimeout(() => {
-        console.log('🔄 Step 2: Invalidating summary queries...')
-        
-        // Depois, invalida os summaries
-        queryClient.invalidateQueries({ queryKey: ['get-summary'] })
-        queryClient.invalidateQueries({ queryKey: ['get-debit-summary'] })
-        queryClient.invalidateQueries({ queryKey: ['get-credit-summary'] })
-      }, 400)
-
-      // Fallback: se ainda houver problemas, força um refetch completo
-      setTimeout(() => {
-        console.log('🔄 Step 3: Final refetch to ensure consistency...')
-        
+        // Refetch específico das queries que realmente importam
         queryClient.refetchQueries({ 
           queryKey: ['list-transactions', currentPage, currentSearchQuery],
-          exact: true 
+          exact: true,
+          type: 'active'
         })
-      }, 600)
+        
+        queryClient.refetchQueries({ 
+          queryKey: ['get-summary'],
+          exact: true,
+          type: 'active'
+        })
+        
+        queryClient.refetchQueries({ 
+          queryKey: ['get-debit-summary'],
+          exact: true,
+          type: 'active'
+        })
+        
+        queryClient.refetchQueries({ 
+          queryKey: ['get-credit-summary'],
+          exact: true,
+          type: 'active'
+        })
+        
+      }, 800) // Aguardar mais tempo para garantir que o servidor processou
     },
   })
 }
