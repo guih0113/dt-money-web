@@ -159,41 +159,31 @@ export function useCreateTransaction(currentPage: number, currentSearchQuery?: s
       })
     },
 
-    onSuccess() {
+    onSuccess(_data, _variables, context) {
       console.log('✅ Transaction created successfully on server')
+      console.log('🆔 SessionId used in creation:', context?.sessionId)
       
-      // ESTRATÉGIA DIFERENTE: Em vez de invalidar imediatamente,
-      // vamos aguardar um pouco mais e usar uma abordagem mais conservadora
+      // REMOVER O REFETCH AUTOMÁTICO - deixar o optimistic update como fonte da verdade
+      // O optimistic update já adicionou a transação, não precisa refetch
       
-      setTimeout(() => {
-        console.log('🔄 Refetching data to ensure consistency...')
-        
-        // Refetch específico das queries que realmente importam
-        queryClient.refetchQueries({ 
-          queryKey: ['list-transactions', currentPage, currentSearchQuery],
-          exact: true,
-          type: 'active'
-        })
-        
-        queryClient.refetchQueries({ 
-          queryKey: ['get-summary'],
-          exact: true,
-          type: 'active'
-        })
-        
-        queryClient.refetchQueries({ 
-          queryKey: ['get-debit-summary'],
-          exact: true,
-          type: 'active'
-        })
-        
-        queryClient.refetchQueries({ 
-          queryKey: ['get-credit-summary'],
-          exact: true,
-          type: 'active'
-        })
-        
-      }, 800) // Aguardar mais tempo para garantir que o servidor processou
+      console.log('🎯 Keeping optimistic update as source of truth - no refetch needed')
+      
+      // Apenas marcar as queries como "fresh" para evitar refetch automático
+      const currentListQueryKey = ['list-transactions', currentPage, currentSearchQuery]
+      
+      queryClient.setQueryData(currentListQueryKey, (current) => {
+        console.log('📊 Current data after success:', current)
+        return current // Manter os dados como estão
+      })
+      
+      // Se precisar refetch por algum motivo específico, fazer isso manualmente depois
+      // setTimeout(() => {
+      //   console.log('🔄 Manual refetch (only if needed)...')
+      //   queryClient.refetchQueries({ 
+      //     queryKey: currentListQueryKey,
+      //     exact: true
+      //   })
+      // }, 2000) // Muito mais tempo
     },
   })
 }
