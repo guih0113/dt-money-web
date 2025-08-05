@@ -23,8 +23,9 @@ export function useCreateTransaction(_currentPage: number, currentSearchQuery?: 
         throw new Error('Failed to create transaction.')
       }
 
-      const result = await response.json()
-      return result
+      // Como o backend retorna apenas status 201 sem body, 
+      // não precisamos fazer parse de JSON
+      return { success: true }
     },
 
     onMutate({ title, description, amount, type }) {
@@ -148,11 +149,15 @@ export function useCreateTransaction(_currentPage: number, currentSearchQuery?: 
     },
 
     onSuccess(_data, _variables, _context) {
+      console.log('✅ Transaction created successfully')
+      
       // IMPORTANTE: Não invalidar imediatamente para não conflitar com optimistic update
       // Em vez disso, fazer um refetch mais inteligente
       
       // Aguardar um pouco para garantir que o servidor processou
       setTimeout(() => {
+        console.log('🔄 Invalidating queries after successful creation')
+        
         // Invalidar apenas as queries que precisam ser atualizadas
         queryClient.invalidateQueries({ 
           queryKey: ['list-transactions'],
