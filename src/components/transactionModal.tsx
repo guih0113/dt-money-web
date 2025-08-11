@@ -2,7 +2,7 @@ import { zodResolver } from '@hookform/resolvers/zod'
 import * as Dialog from '@radix-ui/react-dialog'
 import * as RadioGroup from '@radix-ui/react-radio-group'
 import { CircleArrowDown, CircleArrowUp, X } from 'lucide-react'
-import { useForm } from 'react-hook-form'
+import { Controller, useForm } from 'react-hook-form'
 import z from 'zod'
 import { useCreateTransaction } from '@/http/hooks/useCreateTransaction'
 
@@ -24,6 +24,7 @@ export function TransactionModal({ onTransactionCreated }: TransactionModalProps
 
   const {
     register,
+    control,
     handleSubmit,
     setValue,
     watch,
@@ -79,11 +80,32 @@ export function TransactionModal({ onTransactionCreated }: TransactionModalProps
               </div>
 
               <div className="space-y-1">
-                <input
-                  type="text"
-                  {...register('amount')}
-                  className="h-12 w-full rounded-xl border border-slate-700/50 bg-slate-800/50 px-4 text-white placeholder-slate-400 outline-none transition-all duration-200 focus:border-emerald-500/50 focus:bg-slate-800/70 focus:ring-2 focus:ring-emerald-500/20"
-                  placeholder="Valor (R$)"
+                <Controller
+                  control={control}
+                  name="amount"
+                  render={({ field }) => (
+                    <input
+                      type="text"
+                      className="h-12 w-full rounded-xl border border-slate-700/50 bg-slate-800/50 px-4 text-white placeholder-slate-400 outline-none transition-all duration-200 focus:border-emerald-500/50 focus:bg-slate-800/70 focus:ring-2 focus:ring-emerald-500/20"
+                      placeholder="Valor (R$)"
+                      value={
+                        field.value !== undefined && field.value !== null
+                          ? new Intl.NumberFormat('pt-BR', {
+                              style: 'currency',
+                              currency: 'BRL',
+                            }).format(Number(field.value))
+                          : ''
+                      }
+                      onChange={(e) => {
+                        const value = e.target.value.replace(/\D/g, '')
+                        if (value) {
+                          field.onChange(Number(value) / 100)
+                        } else {
+                          field.onChange(undefined)
+                        }
+                      }}
+                    />
+                  )}
                 />
                 {errors.amount && <span className="font-medium text-red-400 text-sm">{errors.amount.message}</span>}
               </div>
