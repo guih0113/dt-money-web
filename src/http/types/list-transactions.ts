@@ -1,4 +1,4 @@
-import type { Transaction } from "./transaction"
+import type { Transaction } from './transaction'
 
 export type ListTransactionsResponse = {
   page: number

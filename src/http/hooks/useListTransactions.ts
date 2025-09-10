@@ -8,10 +8,10 @@ export function useListTransactions(page: number, searchQuery?: string) {
 
     queryFn: async () => {
       const sessionId = getOrCreateSessionId()
-      
+
       // Definir cookie manualmente para garantir consistência
       document.cookie = `sessionId=${sessionId}; path=/; max-age=${60 * 60 * 24 * 7}; SameSite=None; Secure`
-      
+
       let url = `https://ignite-nodejs-02-api-rest-m3es.onrender.com/transactions?page=${page}`
 
       if (searchQuery) {
@@ -30,10 +30,10 @@ export function useListTransactions(page: number, searchQuery?: string) {
       if (!response.ok) {
         throw new Error('Failed to fetch transactions.')
       }
-      
+
       const result = await response.json()
       console.log('📊 Fetched transactions:', result.transactions?.length || 0, 'items')
-      
+
       return result
     },
     placeholderData: (previousData) => previousData,
